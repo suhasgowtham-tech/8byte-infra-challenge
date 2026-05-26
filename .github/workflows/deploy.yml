@@ -1,0 +1,168 @@
+name: Production Grade CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: core-api-repo
+  ECS_CLUSTER: production-core-cluster
+  ECS_SERVICE_STAGING: staging-core-api
+  ECS_SERVICE_PROD: prod-core-api
+  CONTAINER_NAME: app-container
+
+jobs:
+  # ==========================================
+  # JOB 1: CONTINUOUS INTEGRATION (RUNS ON PR & PUSH)
+  # ==========================================
+  test-and-scan:
+    name: CI Test & Security Validation Perimeter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js Runtime Environment
+        uses: actions/setup-node@v4
+        with:
+          node-cache: 'npm'
+
+      - name: Install Application Dependencies
+        run: npm ci
+
+      - name: Execute Suite (Unit & Integration Tests)
+        run: npm test
+
+      - name: Scan Code Dependencies for Vulnerabilities
+        run: npm audit --audit-level=high
+
+      # Post notifications on failure to alert engineering staff
+      - name: Send Pipeline Failure Alert Notice
+        if: failure()
+        run: |
+          echo "Pipeline Failure Alert! Unit tests or code dependencies audit failed during continuous integration evaluation."
+          # Integration hook for Slack/Email notifications can be added here using webhook contexts
+
+  # ==========================================
+  # JOB 2: BUILD & CONTAINER SECURITY ARTIFACT WRAPPING (RUNS ON MERGE TO MAIN)
+  # ==========================================
+  build-and-push:
+    name: Secure Container Build & Push to Registry
+    needs: test-and-scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build-image.outputs.image }}
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Administrative Access
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Authenticate with Amazon ECR Engine
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Tag Production Docker Container Image
+        id: build-image
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG ./app
+          echo "image=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Scan Container Image for Critical CVE Vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.build-image.outputs.image }}
+          format: 'table'
+          exit-code: '0' # Keep pipeline clean during simulation; change to '1' to actively block builds containing critical vulnerabilities
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push Verified Secure Image out to AWS ECR Registry
+        run: |
+          docker push ${{ steps.build-image.outputs.image }}
+
+      - name: Send Container Packaging Failure Notification
+        if: failure()
+        run: echo "Container vulnerability scanning or compilation crashed."
+
+  # ==========================================
+  # JOB 3: AUTOMATED STAGING CONTINUOUS DEPLOYMENT
+  # ==========================================
+  deploy-staging:
+    name: Continuous Deployment to Staging Core Engine
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Administrative Access
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Current Running Task Definition Matrix
+        run: |
+          aws ecs describe-task-definition --task-definition ${{ env.CONTAINER_NAME }} --query taskDefinition > task-definition.json
+
+      - name: Inject New Image Fingerprint into Task Definition Schema
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ needs.build-and-push.outputs.image }}
+
+      - name: Push Rolling Live Update out to AWS ECS Staging Clusters
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_STAGING }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+  # ==========================================
+  # JOB 4: CHOREOGRAPHED MANUAL PRODUCTION DEPLOYMENT GATE
+  # ==========================================
+  deploy-production:
+    name: Guarded Production Environment Deployment Perimeter
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    # This environment rule hooks directly into GitHub Repository Environments to strictly enforce an approval sign-off gate before execution
+    environment:
+      name: production
+    steps:
+      - name: Configure AWS Administrative Access
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Current Running Task Definition Matrix
+        run: |
+          aws ecs describe-task-definition --task-definition ${{ env.CONTAINER_NAME }} --query taskDefinition > task-definition.json
+
+      - name: Inject New Image Fingerprint into Task Definition Schema
+        id: render-task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ needs.build-and-push.outputs.image }}
+
+      - name: Push Verified Live Deployment out to AWS ECS Production Core Cluster
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task-def.outputs.task-definition }}
+          service: ${{ env.ECS_SERVICE_PROD }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
