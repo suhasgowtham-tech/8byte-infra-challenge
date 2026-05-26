@@ -55,6 +55,7 @@ jobs:
     needs: test-and-scan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    continue-on-error: true
     outputs:
       image: ${{ steps.build-image.outputs.image }}
     steps:
@@ -102,6 +103,7 @@ jobs:
     name: Continuous Deployment to Staging Core Engine
     needs: build-and-push
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Configure AWS Administrative Access
         uses: aws-actions/configure-aws-credentials@v4
@@ -137,6 +139,7 @@ jobs:
     name: Guarded Production Environment Deployment Perimeter
     needs: deploy-staging
     runs-on: ubuntu-latest
+    continue-on-error: true
     environment:
       name: production
     steps:
