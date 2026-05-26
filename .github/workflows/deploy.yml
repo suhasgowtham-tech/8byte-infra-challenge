@@ -31,12 +31,15 @@ jobs:
           node-version: '22'
 
       - name: Install Application Dependencies
+        working-directory: ./app
         run: npm install
 
       - name: Execute Suite (Unit & Integration Tests)
+        working-directory: ./app
         run: npm test
 
       - name: Scan Code Dependencies for Vulnerabilities
+        working-directory: ./app
         run: npm audit --audit-level=high
 
       # Post notifications on failure to alert engineering staff
