@@ -1,3 +1,5 @@
+![CI/CD Pipeline](https://github.com/suhasgowtham-tech/8byte-infra-challenge/actions/workflows/deploy.yml/badge.svg)
+
 \# Multi-Tier AWS Production Infrastructure \& Managed CI/CD Engine
 
 
@@ -81,6 +83,7 @@ terraform plan
 \# Apply the structural additions directly to your target cloud environment
 
 terraform apply -auto-approve
+
 
 
 
