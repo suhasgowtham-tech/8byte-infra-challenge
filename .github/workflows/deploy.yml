@@ -28,7 +28,7 @@ jobs:
       - name: Setup Node.js Runtime Environment
         uses: actions/setup-node@v4
         with:
-          cache: 'npm'
+          node-version: '22'
 
       - name: Install Application Dependencies
         run: npm install
