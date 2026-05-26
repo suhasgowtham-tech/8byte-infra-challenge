@@ -31,7 +31,7 @@ jobs:
           node-cache: 'npm'
 
       - name: Install Application Dependencies
-        run: npm ci
+        run: npm install
 
       - name: Execute Suite (Unit & Integration Tests)
         run: npm test
