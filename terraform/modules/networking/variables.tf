@@ -11,5 +11,5 @@ variable "environment" {
 variable "availability_zones" {
   description = "List of AZs to deploy subnets into"
   type        = list(string)
-  default     = ["ap-south-1a", "ap-south-1b"]
+  default     = ["us-east-1a", "us-east-1b"]
 }

@@ -18,7 +18,7 @@ module "compute" {
 module "database" {
   source                = "./modules/database"
   environment           = var.environment
-  vpc_id                 = module.networking.vpc_id
+  vpc_id                = module.networking.vpc_id
   private_db_subnet_ids = module.networking.private_db_subnet_ids
   app_security_group_id = module.compute.ecs_tasks_security_group_id
 }
