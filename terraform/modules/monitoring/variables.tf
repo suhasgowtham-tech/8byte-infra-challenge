@@ -17,3 +17,14 @@ variable "db_instance_identifier" {
   description = "The RDS PostgreSQL instance identifier for storage tracking"
   type        = string
 }
+
+variable "alb_arn_suffix" {
+  description = "ALB ARN suffix used for load balancer CloudWatch metric dimensions"
+  type        = string
+}
+
+variable "aws_region" {
+  description = "AWS region where all resources are deployed"
+  type        = string
+  default     = "us-east-1"
+}
