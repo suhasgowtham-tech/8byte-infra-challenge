@@ -9,9 +9,10 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: core-api-repo
-  ECS_CLUSTER: production-core-cluster
-  ECS_SERVICE_STAGING: staging-core-api
-  ECS_SERVICE_PROD: prod-core-api
+  ECS_CLUSTER: production-ecs-cluster
+  ECS_SERVICE_STAGING: production-service
+  ECS_SERVICE_PROD: production-service
+  ECS_TASK_DEFINITION: production-task
   CONTAINER_NAME: app-container
 
 jobs:
@@ -114,7 +115,7 @@ jobs:
 
       - name: Download Current Running Task Definition Matrix
         run: |
-          aws ecs describe-task-definition --task-definition ${{ env.CONTAINER_NAME }} --query taskDefinition > task-definition.json
+          aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} --query taskDefinition > task-definition.json
 
       - name: Inject New Image Fingerprint into Task Definition Schema
         id: render-task-def
@@ -152,7 +153,7 @@ jobs:
 
       - name: Download Current Running Task Definition Matrix
         run: |
-          aws ecs describe-task-definition --task-definition ${{ env.CONTAINER_NAME }} --query taskDefinition > task-definition.json
+          aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} --query taskDefinition > task-definition.json
 
       - name: Inject New Image Fingerprint into Task Definition Schema
         id: render-task-def
