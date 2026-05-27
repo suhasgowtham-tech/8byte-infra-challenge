@@ -105,6 +105,8 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     continue-on-error: true
+    outputs:
+      image: ${{ needs.build-and-push.outputs.image }}
     steps:
       - name: Configure AWS Administrative Access
         uses: aws-actions/configure-aws-credentials@v4
@@ -138,7 +140,7 @@ jobs:
   # ==========================================
   deploy-production:
     name: Guarded Production Environment Deployment Perimeter
-    needs: deploy-staging
+    needs: [deploy-staging, build-and-push]
     runs-on: ubuntu-latest
     continue-on-error: true
     environment:
